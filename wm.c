@@ -2,14 +2,18 @@
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 #include <X11/Xproto.h>
-#include <X11/Xatom.h>  
+#include <X11/Xatom.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <time.h>
+#include <stdarg.h>
 
 /* Function declarations */
-void cleanup(void);  // Add this before any function uses it
+void cleanup(void);  
 
 /* Type definitions */
 typedef struct Client {
@@ -42,15 +46,36 @@ static void switchworkspace(const char **arg);
 
 #include "config.h"
 
+/* Global log file */
+static FILE *logfile = NULL;
+
+/* Log message with timestamp */
+static void
+wm_log(const char *fmt, ...) {
+    if (!logfile)
+        return;
+
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    fprintf(logfile, "[%02d:%02d:%02d] ", tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(logfile, fmt, ap);
+    va_end(ap);
+
+    fflush(logfile);
+}
+
 /* Error handler */
 static int
 xerror(Display *dpy __attribute__((unused)), XErrorEvent *ee) {
     if (ee->error_code == BadAccess &&
         ee->request_code == X_ChangeWindowAttributes) {
-        fprintf(stderr, "Error: Another window manager is already running\n");
+        wm_log("Error: Another window manager is already running\n");
         exit(1);
     }
-    fprintf(stderr, "X error: request code=%d, error code=%d\n",
+    wm_log("X error: request code=%d, error code=%d\n",
             ee->request_code, ee->error_code);
     return 0;
 }
@@ -98,7 +123,7 @@ maprequest(XEvent *e)
 
     /* Check if we've reached the maximum for current workspace */
     if (count_windows_in_workspace(current_workspace) >= MAX_WINDOWS) {
-        fprintf(stderr, "Maximum number of windows (%d) reached in workspace %d\n", 
+        wm_log("Maximum number of windows (%d) reached in workspace %d\n",
                 MAX_WINDOWS, current_workspace);
         return;
     }
@@ -119,7 +144,7 @@ maprequest(XEvent *e)
     XChangeWindowAttributes(dpy, ev->window, CWEventMask | CWOverrideRedirect, &wa);
 
     /* Isolate window from others except via clipboard */
-    XChangeProperty(dpy, ev->window, 
+    XChangeProperty(dpy, ev->window,
                    XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False),
                    XA_ATOM, 32, PropModeReplace,
                    (unsigned char *) &clipboard, 1);
@@ -135,7 +160,7 @@ keypress(XEvent *e)
     XKeyEvent *ev = &e->xkey;
     KeySym keysym = XkbKeycodeToKeysym(dpy, ev->keycode, 0, 0);
     long unsigned int i;
-    const char **args;  // Changed from const char * to const char **
+    const char **args;  
 
     for (i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
         if (keysym == keys[i].keysym && keys[i].mod == ev->state && keys[i].func) {
@@ -336,7 +361,7 @@ togglefloating(const char **arg __attribute__((unused)))
 }
 
 void
-cleanup(void) {  // Non-static definition
+cleanup(void) {  
     Client *c, *tmp;
 
     // Clean up all managed windows
@@ -427,14 +452,14 @@ sendtoworkspace(const char **arg)
 {
     if (!sel || !arg || !arg[0])
         return;
-    
+
     int workspace = atoi(arg[0]);
     if (workspace < 1 || workspace > 9)
         return;
 
     /* Check if target workspace has room */
     if (count_windows_in_workspace(workspace) >= MAX_WINDOWS) {
-        fprintf(stderr, "Cannot move window: workspace %d is full (max %d windows)\n",
+        wm_log("Cannot move window: workspace %d is full (max %d windows)\n",
                 workspace, MAX_WINDOWS);
         return;
     }
@@ -451,7 +476,7 @@ switchworkspace(const char **arg)
 {
     if (!arg || !arg[0])
         return;
-    
+
     int workspace = atoi(arg[0]);
     if (workspace < 1 || workspace > 9 || workspace == current_workspace)
         return;
@@ -463,7 +488,7 @@ switchworkspace(const char **arg)
         else if (c->workspace == workspace)
             XMapWindow(dpy, c->win);
     }
-    
+
     current_workspace = workspace;
     focus(NULL);
     arrange();
@@ -474,10 +499,23 @@ main(void)
 {
     XEvent ev;
 
-    fprintf(stderr, "Starting window manager\n");
+    /* Set up logging */
+    char logpath[256];
+    snprintf(logpath, sizeof(logpath), "%s/.local/share/wm", getenv("HOME"));
+    mkdir(logpath, 0755);  // Create directory if it doesn't exist
+
+    char logfile_path[512];
+    snprintf(logfile_path, sizeof(logfile_path), "%s/wm.log", logpath);
+    logfile = fopen(logfile_path, "a");
+    if (!logfile) {
+        fprintf(stderr, "Cannot open log file: %s\n", strerror(errno));
+        exit(1);
+    }
+
+    wm_log("Starting window manager\n");
 
     if (!(dpy = XOpenDisplay(NULL))) {
-        fprintf(stderr, "Cannot open display\n");
+        wm_log("Cannot open display\n");
         exit(1);
     }
 
@@ -485,7 +523,7 @@ main(void)
     clipboard = XInternAtom(dpy, "CLIPBOARD", False);
     primary_selection = XInternAtom(dpy, "PRIMARY", False);
 
-    fprintf(stderr, "Display opened successfully\n");
+    wm_log("Display opened successfully\n");
 
     screen = DefaultScreen(dpy);
     root = RootWindow(dpy, screen);
@@ -502,20 +540,22 @@ main(void)
     XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | EnterWindowMask);
     XSync(dpy, False);
 
-    fprintf(stderr, "Entering event loop\n");
+    wm_log("Entering event loop\n");
 
     scan();
 
     /* Main event loop */
     while (running && !XNextEvent(dpy, &ev)) {
-        fprintf(stderr, "Processing event: %d\n", ev.type);
+        wm_log("Processing event: %d\n", ev.type);
         if (handler[ev.type])
             handler[ev.type](&ev);
     }
 
-    fprintf(stderr, "Exiting event loop\n");
+    wm_log("Exiting event loop\n");
 
     /* Clean up */
     XCloseDisplay(dpy);
+    if (logfile)
+        fclose(logfile);
     return 0;
 }
