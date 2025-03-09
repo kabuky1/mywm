@@ -2,19 +2,22 @@ CC = gcc
 CFLAGS = -Wall -Wextra -O2
 LDFLAGS = -lX11
 
-TARGET = wm
-SRCS = wm.c
-OBJS = $(SRCS:.c=.o)
+PREFIX = $(HOME)/.local
+BINDIR = $(PREFIX)/bin
 
-all: $(TARGET)
+all: wm
 
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS)
+wm: wm.o
+	$(CC) -o $@ $^ $(LDFLAGS)
 
-%.o: %.c config.h
-	$(CC) $(CFLAGS) -c $< -o $@
+wm.o: wm.c config.h
+	$(CC) $(CFLAGS) -c $<
+
+install: wm
+	mkdir -p $(BINDIR)
+	install -m 755 wm $(BINDIR)/wm
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f wm *.o
 
-.PHONY: all clean
+.PHONY: all clean install

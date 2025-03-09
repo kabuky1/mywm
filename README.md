@@ -5,12 +5,14 @@ A lightweight X11 window manager with workspaces and window isolation.
 ## Features
 
 - Tiling window management
-- Multiple workspaces (1-3)
+- Multiple workspaces (1-9)
 - Window isolation (windows can only communicate via clipboard)
-- Master-stack layout
+- Smart borders (hidden for single/fullscreen windows)
+- Master-stack layout with gaps
 - Floating window support
 - Per-workspace window limits
 - Automatic fullscreen for single windows
+- Colored borders for active/inactive windows
 
 ## Installation Prerequisites
 
@@ -39,10 +41,12 @@ sudo pacman -S xorg-server base-devel libx11 libxft libxinerama
 - `Super + k` - Focus previous window
 - `Super + Space` - Toggle floating mode
 - `Super + Shift + Return` - Swap focused window with master
+- 'Super + Shift + c' - Kill focused window
+- `Super + Shift + f` - Toggle fullscreen mode
 
 ### Workspace Control
-- `Super + [1-3]` - Switch to workspace 1-3
-- `Super + Shift + [1-3]` - Move focused window to workspace 1-3
+- `Super + [1-9]` - Switch to workspace 1-9
+- `Super + Shift + [1-9]` - Move focused window to workspace 1-9
 
 ### Layout Control
 - `Super + h` - Decrease master area
@@ -94,10 +98,13 @@ The window manager can be configured by editing:
 
 ### Important Settings
 - `MAX_WINDOWS`: Maximum windows per workspace (default: 5)
-- `BORDER_WIDTH`: Window border size in pixels (default: 5)
+- `BORDER_WIDTH`: Window border size in pixels (default: 2)
 - `MASTER_SIZE`: Default master area ratio (default: 0.45)
+- `GAP_WIDTH`: Size of gaps between windows (default: 5)
+- `ACTIVE_BORDER`: Color of focused window border (default: purple)
+- `INACTIVE_BORDER`: Color of unfocused window borders (default: dark grey)
 
 Rebuild after making changes:
 ```bash
-make clean && make
+make clean install
 ```

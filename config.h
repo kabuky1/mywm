@@ -48,6 +48,7 @@ static const struct {
     { MODKEY, XK_j, focusnext, NULL },        // Focus next window
     { MODKEY, XK_k, focusprev, NULL },        // Focus previous window
     { SMODKEY, XK_f, togglefullscreen, NULL }, // Toggle fullscreen
+    { SMODKEY, XK_c, killclient, NULL },      // Kill focused window
     { SMODKEY, XK_q, quit, NULL },            // Quit window manager
     
     /* Layout control */
@@ -70,6 +71,18 @@ static const struct {
     { MODKEY, XK_2, switchworkspace, (const char *[]){"2", NULL} },     /* Switch to workspace 2 */
     { SMODKEY, XK_3, sendtoworkspace, (const char *[]){"3", NULL} },      /* Move window to workspace 3 */
     { MODKEY, XK_3, switchworkspace, (const char *[]){"3", NULL} },     /* Switch to workspace 3 */
+    { SMODKEY, XK_4, sendtoworkspace, (const char *[]){"4", NULL} },      /* Move window to workspace 4 */
+    { MODKEY, XK_4, switchworkspace, (const char *[]){"4", NULL} },     /* Switch to workspace 4 */
+    { SMODKEY, XK_5, sendtoworkspace, (const char *[]){"5", NULL} },      /* Move window to workspace 5 */
+    { MODKEY, XK_5, switchworkspace, (const char *[]){"5", NULL} },     /* Switch to workspace 5 */
+    { SMODKEY, XK_6, sendtoworkspace, (const char *[]){"6", NULL} },      /* Move window to workspace 6 */
+    { MODKEY, XK_6, switchworkspace, (const char *[]){"6", NULL} },     /* Switch to workspace 6 */
+    { SMODKEY, XK_7, sendtoworkspace, (const char *[]){"7", NULL} },      /* Move window to workspace 7 */
+    { MODKEY, XK_7, switchworkspace, (const char *[]){"7", NULL} },     /* Switch to workspace 7 */
+    { SMODKEY, XK_8, sendtoworkspace, (const char *[]){"8", NULL} },      /* Move window to workspace 8 */
+    { MODKEY, XK_8, switchworkspace, (const char *[]){"8", NULL} },     /* Switch to workspace 8 */
+    { SMODKEY, XK_9, sendtoworkspace, (const char *[]){"9", NULL} },      /* Move window to workspace 9 */
+    { MODKEY, XK_9, switchworkspace, (const char *[]){"9", NULL} },     /* Switch to workspace 9 */    
 };
 
 /* Window manager settings */

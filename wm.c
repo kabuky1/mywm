@@ -45,6 +45,7 @@ static void enternotify(XEvent *e);
 static void sendtoworkspace(const char **arg);
 static void switchworkspace(const char **arg);
 static void togglefullscreen(const char **arg);
+static void killclient(const char **arg);
 
 #include "config.h"
 
@@ -149,6 +150,9 @@ maprequest(XEvent *e)
                           CWEventMask | CWOverrideRedirect | CWBorderPixel, 
                           &wa);
 
+    /* Set initial border width */
+    XSetWindowBorderWidth(dpy, ev->window, BORDER_WIDTH);
+
     /* Isolate window from others except via clipboard */
     XChangeProperty(dpy, ev->window,
                    XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False),
@@ -217,18 +221,35 @@ void
 focus(Client *c)
 {
     Client *i;
+    int visible = 0;
     if (!c)
         return;
 
-    // Set all windows to inactive border color first
+    /* Count visible windows in workspace */
     for (i = clients; i; i = i->next)
         if (i->workspace == current_workspace)
-            XSetWindowBorder(dpy, i->win, INACTIVE_BORDER);
+            visible++;
+
+    /* Set borders only if more than one window and not fullscreen */
+    if (visible > 1 && !c->isfullscreen) {
+        /* Set all windows to inactive border */
+        for (i = clients; i; i = i->next) {
+            if (i->workspace == current_workspace) {
+                XSetWindowBorderWidth(dpy, i->win, BORDER_WIDTH);
+                XSetWindowBorder(dpy, i->win, INACTIVE_BORDER);
+            }
+        }
+        /* Set active window border */
+        XSetWindowBorderWidth(dpy, c->win, BORDER_WIDTH);
+        XSetWindowBorder(dpy, c->win, ACTIVE_BORDER);
+    } else {
+        /* No borders needed */
+        XSetWindowBorderWidth(dpy, c->win, 0);
+    }
 
     sel = c;
     XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
     XRaiseWindow(dpy, c->win);
-    XSetWindowBorder(dpy, c->win, ACTIVE_BORDER);
 }
 
 void
@@ -240,6 +261,7 @@ arrange(void)
     /* Handle fullscreen windows first */
     for (c = clients; c; c = c->next) {
         if (c->isfullscreen && c->workspace == current_workspace) {
+            XSetWindowBorderWidth(dpy, c->win, 0);
             XMoveResizeWindow(dpy, c->win, 0, 0, attr.width, attr.height);
             XRaiseWindow(dpy, c->win);
             return;
@@ -262,10 +284,11 @@ arrange(void)
         }
     }
 
-    /* If only one visible window in workspace, make it fullscreen */
+    /* If only one visible window in workspace, make it fullscreen without borders */
     if (visible == 1) {
         for (c = clients; c; c = c->next) {
             if (c->workspace == current_workspace) {
+                XSetWindowBorderWidth(dpy, c->win, 0);
                 XMoveResizeWindow(dpy, c->win, 0, 0, attr.width, attr.height);
                 break;
             }
@@ -298,23 +321,28 @@ arrange(void)
 
     /* Master */
     if (master) {
-        int master_width = (attr.width * mfact) - (GAP_WIDTH * 1.5);
-        XMoveResizeWindow(dpy, master->win, GAP_WIDTH, GAP_WIDTH,
-                        master_width,
-                        attr.height - (GAP_WIDTH * 2));
+        int master_width = (attr.width * mfact) - (GAP_WIDTH * 1.5) - (BORDER_WIDTH * 2);
+        XMoveResizeWindow(dpy, master->win, 
+                        GAP_WIDTH,                    // x position
+                        GAP_WIDTH,                    // y position
+                        master_width,                 // width
+                        attr.height - (GAP_WIDTH * 2) - (BORDER_WIDTH * 2)); // height
         XRaiseWindow(dpy, master->win);
     }
 
     /* Stack */
     if (n > 1) {
-        int stack_width = (attr.width * (1 - mfact)) - (GAP_WIDTH * 1.5);
+        int stack_width = (attr.width * (1 - mfact)) - (GAP_WIDTH * 1.5) - (BORDER_WIDTH * 2);
         int x = (attr.width * mfact) + (GAP_WIDTH * 0.5);
         int i = 0;
         for (c = clients; c; c = c->next) {
             if (!c->isfloating && c != master) {
-                int height = (attr.height / (n - 1)) - (GAP_WIDTH * 2);
-                XMoveResizeWindow(dpy, c->win, x, (i * height) + ((i + 1) * GAP_WIDTH),
-                                stack_width, height);
+                int height = (attr.height / (n - 1)) - (GAP_WIDTH * 2) - (BORDER_WIDTH * 2);
+                XMoveResizeWindow(dpy, c->win, 
+                                x,                                         // x position
+                                (i * (height + GAP_WIDTH)) + GAP_WIDTH,   // y position with gap
+                                stack_width,                              // width
+                                height);                                  // height
                 XRaiseWindow(dpy, c->win);
                 i++;
             }
@@ -398,11 +426,26 @@ togglefullscreen(const char **arg __attribute__((unused)))
         sel->y = wa.y;
         sel->w = wa.width;
         sel->h = wa.height;
+        
+        /* Remove borders and go full screen */
+        XSetWindowBorderWidth(dpy, sel->win, 0);
+        XMoveResizeWindow(dpy, sel->win, 0, 0, attr.width, attr.height);
+    } else {
+        /* Restore borders and previous size */
+        XSetWindowBorderWidth(dpy, sel->win, BORDER_WIDTH);
+        XSetWindowBorder(dpy, sel->win, ACTIVE_BORDER);
+        XMoveResizeWindow(dpy, sel->win, sel->x, sel->y, sel->w, sel->h);  
     }
 
-    wm_log("Toggling fullscreen for window: %d, state: %d\n", 
-           (int)sel->win, sel->isfullscreen);
     arrange();
+}
+
+void
+killclient(const char **arg __attribute__((unused)))
+{
+    if (!sel)
+        return;
+    XKillClient(dpy, sel->win);
 }
 
 void
