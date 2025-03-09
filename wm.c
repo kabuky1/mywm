@@ -22,6 +22,7 @@ typedef struct Client {
     struct Client *next;
     int isfloating;
     int workspace;  /* Workspace ID for this window */
+    int isfullscreen;  /* Add fullscreen flag */
 } Client;
 
 /* Forward declarations */
@@ -43,6 +44,7 @@ static void swapmaster(const char **arg);
 static void enternotify(XEvent *e);
 static void sendtoworkspace(const char **arg);
 static void switchworkspace(const char **arg);
+static void togglefullscreen(const char **arg);
 
 #include "config.h"
 
@@ -133,6 +135,7 @@ maprequest(XEvent *e)
     c->win = ev->window;
     c->next = clients;
     c->isfloating = 0;
+    c->isfullscreen = 0;  // Initialize fullscreen state
     c->workspace = current_workspace;
     clients = c;
     sel = c;
@@ -224,11 +227,20 @@ arrange(void)
     Client *c, *master = NULL;
     int n = 0, visible = 0;
 
+    /* Handle fullscreen windows first */
+    for (c = clients; c; c = c->next) {
+        if (c->isfullscreen && c->workspace == current_workspace) {
+            XMoveResizeWindow(dpy, c->win, 0, 0, attr.width, attr.height);
+            XRaiseWindow(dpy, c->win);
+            return;
+        }
+    }
+
     /* Count non-floating windows in current workspace and visible windows */
     for (c = clients; c; c = c->next) {
-        if (!c->isfloating && c->workspace == current_workspace)
+        if (!c->isfloating && !c->isfullscreen && c->workspace == current_workspace)
             n++;
-        if (c->workspace == current_workspace)
+        if (c->workspace == current_workspace && !c->isfullscreen)
             visible++;
     }
 
@@ -361,6 +373,29 @@ togglefloating(const char **arg __attribute__((unused)))
 }
 
 void
+togglefullscreen(const char **arg __attribute__((unused)))
+{
+    if (!sel)
+        return;
+
+    sel->isfullscreen = !sel->isfullscreen;
+
+    if (sel->isfullscreen) {
+        /* Save window dimensions before going fullscreen */
+        XWindowAttributes wa;
+        XGetWindowAttributes(dpy, sel->win, &wa);
+        sel->x = wa.x;
+        sel->y = wa.y;
+        sel->w = wa.width;
+        sel->h = wa.height;
+    }
+
+    wm_log("Toggling fullscreen for window: %d, state: %d\n", 
+           (int)sel->win, sel->isfullscreen);
+    arrange();
+}
+
+void
 cleanup(void) {  
     Client *c, *tmp;
 
@@ -437,6 +472,7 @@ scan(void)
             c->win = children[i];
             c->next = clients;
             c->isfloating = 0;
+            c->isfullscreen = 0;  // Initialize fullscreen state
             clients = c;
             XMapWindow(dpy, children[i]);
         }
