@@ -1,14 +1,16 @@
-# Simple X11 Tiling Window Manager
+# Minimalist Window Manager
 
-A lightweight tiling window manager for X11 with configurable keyboard shortcuts.
+A lightweight X11 window manager with workspaces and window isolation.
 
 ## Features
 
 - Tiling window management
-- Dynamic keyboard shortcuts defined in config.h
+- Multiple workspaces (1-3)
+- Window isolation (windows can only communicate via clipboard)
 - Master-stack layout
 - Floating window support
-- Simple and clean codebase
+- Per-workspace window limits
+- Automatic fullscreen for single windows
 
 ## Installation Prerequisites
 
@@ -30,32 +32,39 @@ sudo dnf install xorg-x11-server-Xorg gcc libX11-devel libXft-devel libXinerama-
 sudo pacman -S xorg-server base-devel libx11 libxft libxinerama
 ```
 
-## Complete Keybindings
+## Default Keybindings
 
-All keybindings use the Super (Windows) key as the modifier:
+### Window Management
+- `Super + j` - Focus next window
+- `Super + k` - Focus previous window
+- `Super + Space` - Toggle floating mode
+- `Super + Shift + Return` - Swap focused window with master
 
-- `Super + j`: Focus next window
-- `Super + k`: Focus previous window
-- `Super + Return`: Spawn terminal (alacritty)
-- `Super + Shift + q`: Quit window manager
-- `Super + h`: Decrease master area size
-- `Super + l`: Increase master area size
-- `Super + Return`: Move focused window to master area
-- `Super + Space`: Toggle floating mode for focused window
-- `Super + Shift + Return`: Swap master window
-- `Super + p`: Launch application menu (rofi)
-- `Super + w`: Launch Firefox
-- `Super + Shift + w`: Launch WiFi chooser
-- `Super + c`: Launch digital clock
-- `Super + Shift + s`: Open power menu
+### Workspace Control
+- `Super + [1-3]` - Switch to workspace 1-3
+- `Super + Shift + [1-3]` - Move focused window to workspace 1-3
 
-## Multimedia Keys
+### Layout Control
+- `Super + h` - Decrease master area
+- `Super + l` - Increase master area
 
-- `Volume Up`: Increase volume
-- `Volume Down`: Decrease volume
-- `Mute`: Toggle mute
-- `Brightness Up`: Increase brightness
-- `Brightness Down`: Decrease brightness
+### Applications
+- `Super + p` - Launch application menu (rofi)
+- `Super + w` - Launch Firefox
+- `Super + Shift + w` - Launch WiFi selector
+- `Super + c` - Launch digital clock
+- `Super + Return` - Launch terminal (alacritty)
+- `Super + Shift + s` - Launch power menu
+
+### System Controls
+- `XF86AudioRaiseVolume` - Volume up
+- `XF86AudioLowerVolume` - Volume down
+- `XF86AudioMute` - Toggle mute
+- `XF86MonBrightnessUp` - Brightness up
+- `XF86MonBrightnessDown` - Brightness down
+
+### Session
+- `Super + Shift + q` - Quit window manager
 
 ## Building
 
@@ -78,12 +87,15 @@ make
    ```
 3. Start X with `startx`
 
-## Customization
+## Configuration
 
-Edit `config.h` to modify:
-- Keyboard shortcuts
-- Border colors and width
-- Default layout parameters
+The window manager can be configured by editing:
+- `config.h` - Keybindings and general settings
+
+### Important Settings
+- `MAX_WINDOWS`: Maximum windows per workspace (default: 5)
+- `BORDER_WIDTH`: Window border size in pixels (default: 5)
+- `MASTER_SIZE`: Default master area ratio (default: 0.45)
 
 Rebuild after making changes:
 ```bash
