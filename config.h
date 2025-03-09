@@ -4,6 +4,10 @@
 #include <X11/keysym.h>
 #include <X11/XF86keysym.h>
 
+/* Colors */
+#define ACTIVE_BORDER   0xffbd93f9    /* Blue border for active window */
+#define INACTIVE_BORDER 0x333333    
+
 /* Key modifiers */
 #define MODKEY Mod4Mask         /* Super (Windows) key */
 #define SMODKEY Mod4Mask|ShiftMask  /* Super + Shift */
@@ -73,5 +77,6 @@ static const struct {
 #define MASTER_SIZE   0.45  /* Master area ratio */
 #define MIN_WIN_SIZE  45    /* Minimum window size */
 #define MAX_WINDOWS   5     /* Window limit per workspace*/
+#define GAP_WIDTH     5    /* Gap between windows */
 
 #endif /* CONFIG_H */

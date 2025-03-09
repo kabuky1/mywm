@@ -21,8 +21,8 @@ typedef struct Client {
     int x, y, w, h;
     struct Client *next;
     int isfloating;
-    int workspace;  /* Workspace ID for this window */
-    int isfullscreen;  /* Add fullscreen flag */
+    int workspace;  
+    int isfullscreen;  
 } Client;
 
 /* Forward declarations */
@@ -144,7 +144,10 @@ maprequest(XEvent *e)
     XSetWindowAttributes wa;
     wa.event_mask = EnterWindowMask | KeyPressMask;
     wa.override_redirect = True;  // Prevent direct window communication
-    XChangeWindowAttributes(dpy, ev->window, CWEventMask | CWOverrideRedirect, &wa);
+    wa.border_pixel = INACTIVE_BORDER;
+    XChangeWindowAttributes(dpy, ev->window, 
+                          CWEventMask | CWOverrideRedirect | CWBorderPixel, 
+                          &wa);
 
     /* Isolate window from others except via clipboard */
     XChangeProperty(dpy, ev->window,
@@ -204,7 +207,7 @@ configurerequest(XEvent *e)
     wc.y = ev->y;
     wc.width = ev->width;
     wc.height = ev->height;
-    wc.border_width = BORDER_WIDTH;  /* Ensure border width is explicitly set */
+    wc.border_width = BORDER_WIDTH;  
     wc.sibling = ev->above;
     wc.stack_mode = ev->detail;
     XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
@@ -213,12 +216,19 @@ configurerequest(XEvent *e)
 void
 focus(Client *c)
 {
+    Client *i;
     if (!c)
         return;
+
+    // Set all windows to inactive border color first
+    for (i = clients; i; i = i->next)
+        if (i->workspace == current_workspace)
+            XSetWindowBorder(dpy, i->win, INACTIVE_BORDER);
 
     sel = c;
     XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
     XRaiseWindow(dpy, c->win);
+    XSetWindowBorder(dpy, c->win, ACTIVE_BORDER);
 }
 
 void
@@ -288,22 +298,22 @@ arrange(void)
 
     /* Master */
     if (master) {
-        int master_width = attr.width * mfact;
-        XMoveResizeWindow(dpy, master->win, 0, 0,
+        int master_width = (attr.width * mfact) - (GAP_WIDTH * 1.5);
+        XMoveResizeWindow(dpy, master->win, GAP_WIDTH, GAP_WIDTH,
                         master_width,
-                        attr.height);
+                        attr.height - (GAP_WIDTH * 2));
         XRaiseWindow(dpy, master->win);
     }
 
     /* Stack */
     if (n > 1) {
-        int stack_width = attr.width * (1 - mfact);
-        int x = attr.width * mfact;
+        int stack_width = (attr.width * (1 - mfact)) - (GAP_WIDTH * 1.5);
+        int x = (attr.width * mfact) + (GAP_WIDTH * 0.5);
         int i = 0;
         for (c = clients; c; c = c->next) {
             if (!c->isfloating && c != master) {
-                int height = attr.height / (n - 1);
-                XMoveResizeWindow(dpy, c->win, x, i * height,
+                int height = (attr.height / (n - 1)) - (GAP_WIDTH * 2);
+                XMoveResizeWindow(dpy, c->win, x, (i * height) + ((i + 1) * GAP_WIDTH),
                                 stack_width, height);
                 XRaiseWindow(dpy, c->win);
                 i++;
