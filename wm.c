@@ -46,6 +46,9 @@ static void sendtoworkspace(const char **arg);
 static void switchworkspace(const char **arg);
 static void togglefullscreen(const char **arg);
 static void killclient(const char **arg);
+static void buttonpress(XEvent *e);
+static void buttonrelease(XEvent *e);
+static void motionnotify(XEvent *e);
 
 #include "config.h"
 
@@ -96,6 +99,9 @@ static int current_workspace = 1;  /* Current workspace (1-based index) */
 // Add these new globals
 static Atom clipboard;
 static Atom primary_selection;
+static int dragx, dragy;           // Initial cursor position
+static Client *dragclient = NULL;  // Window being dragged
+static int drag_started = 0;       // Track if drag has started
 
 /* Event handler mapping table */
 static void (*handler[LASTEvent]) (XEvent *) = {
@@ -104,6 +110,9 @@ static void (*handler[LASTEvent]) (XEvent *) = {
     [DestroyNotify] = destroynotify, // Handle window destruction
     [ConfigureRequest] = configurerequest, // Handle window resize/move requests
     [EnterNotify] = enternotify,    // Handle mouse enter events
+    [ButtonPress] = buttonpress,
+    [ButtonRelease] = buttonrelease,
+    [MotionNotify] = motionnotify,
 };
 
 /* Helper function to count windows in a workspace */
@@ -169,6 +178,11 @@ maprequest(XEvent *e)
                    XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False),
                    XA_ATOM, 32, PropModeReplace,
                    (unsigned char *) &clipboard, 1);
+
+    /* Add mouse button grabs */
+    XGrabButton(dpy, Button1, MODKEY, ev->window, True,
+                ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                GrabModeAsync, GrabModeAsync, None, None);
 
     XMapWindow(dpy, ev->window);
     
@@ -601,6 +615,105 @@ switchworkspace(const char **arg)
     arrange();
 }
 
+void
+buttonpress(XEvent *e)
+{
+    XButtonEvent *ev = &e->xbutton;
+    Client *c;
+
+    for (c = clients; c; c = c->next) {
+        if (c->win == ev->window) {
+            if (ev->button == Button1 && ev->state & MODKEY) {
+                dragx = ev->x_root;
+                dragy = ev->y_root;
+                dragclient = c;
+                drag_started = 1;
+                XSetWindowBorderWidth(dpy, c->win, BORDER_WIDTH * 2);
+                focus(c);
+                XGrabPointer(dpy, root, True,
+                            PointerMotionMask | ButtonReleaseMask,
+                            GrabModeAsync, GrabModeAsync,
+                            root, None, CurrentTime);
+            }
+            return;
+        }
+    }
+}
+
+void
+buttonrelease(XEvent *e)
+{
+    XButtonEvent *ev = &e->xbutton;
+    Client *c;
+    Window dummy;
+    int rx, ry, x, y;
+    unsigned int mask;
+
+    if (!drag_started)
+        return;
+
+    /* Find window under pointer */
+    if (XQueryPointer(dpy, root, &dummy, &dummy, &rx, &ry, &x, &y, &mask)) {
+        Window win_under;
+        int win_x, win_y;
+        XTranslateCoordinates(dpy, root, root, rx, ry, &win_x, &win_y, &win_under);
+
+        /* Find client under pointer */
+        for (c = clients; c; c = c->next) {
+            if (c->win == win_under && c != dragclient && 
+                c->workspace == current_workspace) {
+                /* Swap windows in linked list */
+                Client *prev_drag = NULL, *prev_c = NULL;
+                Client *t;
+
+                /* Find nodes */
+                for (t = clients; t && t != dragclient; t = t->next)
+                    prev_drag = t;
+                for (t = clients; t && t != c; t = t->next)
+                    prev_c = t;
+
+                /* Swap positions */
+                if (prev_drag)
+                    prev_drag->next = c;
+                else
+                    clients = c;
+
+                if (prev_c)
+                    prev_c->next = dragclient;
+                else
+                    clients = dragclient;
+
+                t = dragclient->next;
+                dragclient->next = c->next;
+                c->next = t;
+
+                break;
+            }
+        }
+    }
+
+    XUngrabPointer(dpy, CurrentTime);
+    XSetWindowBorderWidth(dpy, dragclient->win, BORDER_WIDTH);
+    dragclient = NULL;
+    drag_started = 0;
+    arrange();
+}
+
+void
+motionnotify(XEvent *e)
+{
+    if (!drag_started)
+        return;
+
+    XMotionEvent *ev = &e->xmotion;
+    int dx = ev->x_root - dragx;
+    int dy = ev->y_root - dragy;
+    
+    XMoveWindow(dpy, dragclient->win,
+                dragclient->x + dx,
+                dragclient->y + dy);
+}
+
 int
 main(void)
 {
@@ -644,7 +757,9 @@ main(void)
 
     /* Select events */
     XSetErrorHandler(xerror);
-    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | EnterWindowMask);
+    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask |
+                           ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
+                           EnterWindowMask);
     XSync(dpy, False);
 
     wm_log("Entering event loop\n");

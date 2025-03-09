@@ -13,6 +13,7 @@ A lightweight X11 window manager with workspaces and window isolation.
 - Per-workspace window limits
 - Automatic fullscreen for single windows
 - Colored borders for active/inactive windows
+- Drag and drop window swapping
 
 ## Installation Prerequisites
 
@@ -41,8 +42,9 @@ sudo pacman -S xorg-server base-devel libx11 libxft libxinerama
 - `Super + k` - Focus previous window
 - `Super + Space` - Toggle floating mode
 - `Super + Shift + Return` - Swap focused window with master
-- 'Super + Shift + c' - Kill focused window
+- `Super + Shift + c` - Kill focused window
 - `Super + Shift + f` - Toggle fullscreen mode
+- `Super + Left Click + Drag` - Drag window to swap position with another window
 
 ### Workspace Control
 - `Super + [1-9]` - Switch to workspace 1-9
