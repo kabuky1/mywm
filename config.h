@@ -15,6 +15,7 @@
 /* External commands */
 static const char *roficmd[] = {"rofi", "-theme", "~/.config/rofi/config.rasi", "-show", "drun", "-location", "0", "-xoffset", "0", "-yoffset", "0", NULL};
 static const char *firefoxcmd[] = {"firefox", NULL};  // Web browser
+static const char *browsercmd[] = {"web-browser", NULL};
 static const char *wifi_choosercmd[] = {"wifi_chooser.sh", NULL};  // WiFi network selector
 static const char *digital_clockcmd[] = {"digital_clock", NULL};  // Digital clock
 static const char *alacrittycmd[] = {"alacritty", NULL};  // Terminal emulator
@@ -38,7 +39,8 @@ static const struct {
 } keys[] = {
     /* Launchers */
     { MODKEY, XK_p, spawn, roficmd },         // Open application launcher
-    { MODKEY, XK_w, spawn, firefoxcmd },      // Launch Firefox
+    { MODKEY, XK_w, spawn, browsercmd },      // Launch web-browser
+    { MODKEY, XK_f, spawn, firefoxcmd },      // Launch firefox
     { SMODKEY, XK_w, spawn, wifi_choosercmd }, // Open WiFi selector
     { MODKEY, XK_c, spawn, digital_clockcmd }, // Launch digital clock
     { MODKEY, XK_Return, spawn, alacrittycmd }, // Open terminal emulator
