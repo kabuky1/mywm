@@ -118,6 +118,17 @@ count_windows_in_workspace(int workspace)
     return count;
 }
 
+/* Add this helper function after the other static declarations */
+static Client *
+find_fullscreen(void)
+{
+    Client *c;
+    for (c = clients; c; c = c->next)
+        if (c->isfullscreen && c->workspace == current_workspace)
+            return c;
+    return NULL;
+}
+
 void
 maprequest(XEvent *e)
 {
@@ -160,6 +171,13 @@ maprequest(XEvent *e)
                    (unsigned char *) &clipboard, 1);
 
     XMapWindow(dpy, ev->window);
+    
+    /* If there's a fullscreen window, keep it on top */
+    Client *fs = find_fullscreen();
+    if (fs) {
+        XRaiseWindow(dpy, fs->win);
+    }
+    
     arrange();
     focus(sel);
 }
@@ -259,13 +277,12 @@ arrange(void)
     int n = 0, visible = 0;
 
     /* Handle fullscreen windows first */
-    for (c = clients; c; c = c->next) {
-        if (c->isfullscreen && c->workspace == current_workspace) {
-            XSetWindowBorderWidth(dpy, c->win, 0);
-            XMoveResizeWindow(dpy, c->win, 0, 0, attr.width, attr.height);
-            XRaiseWindow(dpy, c->win);
-            return;
-        }
+    Client *fs = find_fullscreen();
+    if (fs) {
+        XSetWindowBorderWidth(dpy, fs->win, 0);
+        XMoveResizeWindow(dpy, fs->win, 0, 0, attr.width, attr.height);
+        XRaiseWindow(dpy, fs->win);
+        return;
     }
 
     /* Count non-floating windows in current workspace and visible windows */
@@ -430,6 +447,7 @@ togglefullscreen(const char **arg __attribute__((unused)))
         /* Remove borders and go full screen */
         XSetWindowBorderWidth(dpy, sel->win, 0);
         XMoveResizeWindow(dpy, sel->win, 0, 0, attr.width, attr.height);
+        XRaiseWindow(dpy, sel->win);
     } else {
         /* Restore borders and previous size */
         XSetWindowBorderWidth(dpy, sel->win, BORDER_WIDTH);
