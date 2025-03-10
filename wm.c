@@ -11,10 +11,10 @@
 #include <errno.h>
 #include <time.h>
 #include <stdarg.h>
-#include <linux/limits.h> 
+#include <linux/limits.h>
 
 /* Function declarations */
-void cleanup(void);  
+void cleanup(void);
 
 /* Type definitions */
 typedef struct Client {
@@ -22,8 +22,8 @@ typedef struct Client {
     int x, y, w, h;
     struct Client *next;
     int isfloating;
-    int workspace;  
-    int isfullscreen;  
+    int workspace;
+    int isfullscreen;
 } Client;
 
 /* Forward declarations */
@@ -52,6 +52,7 @@ static void buttonrelease(XEvent *e);
 static void motionnotify(XEvent *e);
 static void clearworkspace(const char **arg);
 static void showworkspace(const char **arg);
+static void reload(const char **arg);
 
 #include "config.h"
 
@@ -144,7 +145,7 @@ find_fullscreen(void)
 /* Add these validation functions near the top */
 static int
 validate_window_size(int w, int h) {
-    return (w >= MIN_WIN_SIZE && h >= MIN_WIN_SIZE && 
+    return (w >= MIN_WIN_SIZE && h >= MIN_WIN_SIZE &&
             w <= attr.width && h <= attr.height);
 }
 
@@ -164,7 +165,7 @@ validate_spawn_args(const char **arg) {
 
     /* Check for command injection attempts */
     for (int i = 0; arg[i]; i++) {
-        if (strchr(arg[i], ';') || strchr(arg[i], '|') || 
+        if (strchr(arg[i], ';') || strchr(arg[i], '|') ||
             strchr(arg[i], '&') || strchr(arg[i], '`')) {
             wm_log("Rejected spawn command with invalid characters: %s\n", arg[i]);
             return 0;
@@ -205,6 +206,24 @@ validate_spawn_args(const char **arg) {
     }
 
     return 1;
+}
+
+/* Add this helper function before maprequest */
+static int
+is_child_of_fullscreen(Window win) {
+    Window root, parent, *children;
+    unsigned int nchildren;
+    Client *fs = find_fullscreen();
+
+    if (!fs) return 0;
+
+    if (!XQueryTree(dpy, win, &root, &parent, &children, &nchildren))
+        return 0;
+
+    if (children)
+        XFree(children);
+
+    return (parent == fs->win);
 }
 
 void
@@ -259,8 +278,8 @@ maprequest(XEvent *e)
     swa.event_mask = EnterWindowMask | KeyPressMask;
     swa.override_redirect = True;  // Prevent direct window communication
     swa.border_pixel = INACTIVE_BORDER;
-    XChangeWindowAttributes(dpy, ev->window, 
-                          CWEventMask | CWOverrideRedirect | CWBorderPixel, 
+    XChangeWindowAttributes(dpy, ev->window,
+                          CWEventMask | CWOverrideRedirect | CWBorderPixel,
                           &swa);
 
     /* Set initial border width */
@@ -278,13 +297,19 @@ maprequest(XEvent *e)
                 GrabModeAsync, GrabModeAsync, None, None);
 
     XMapWindow(dpy, ev->window);
-    
-    /* If there's a fullscreen window, keep it on top */
+
+    /* Handle child windows of fullscreen windows */
     Client *fs = find_fullscreen();
     if (fs) {
-        XRaiseWindow(dpy, fs->win);
+        if (is_child_of_fullscreen(ev->window)) {
+            /* Child window of fullscreen window - keep on top */
+            XRaiseWindow(dpy, ev->window);
+        } else {
+            /* Not a child - keep fullscreen window on top */
+            XRaiseWindow(dpy, fs->win);
+        }
     }
-    
+
     arrange();
     focus(sel);
 }
@@ -295,7 +320,7 @@ keypress(XEvent *e)
     XKeyEvent *ev = &e->xkey;
     KeySym keysym = XkbKeycodeToKeysym(dpy, ev->keycode, 0, 0);
     long unsigned int i;
-    const char **args;  
+    const char **args;
 
     for (i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
         if (keysym == keys[i].keysym && keys[i].mod == ev->state && keys[i].func) {
@@ -349,7 +374,7 @@ configurerequest(XEvent *e)
     wc.y = ev->y;
     wc.width = ev->width;
     wc.height = ev->height;
-    wc.border_width = BORDER_WIDTH;  
+    wc.border_width = BORDER_WIDTH;
     wc.sibling = ev->above;
     wc.stack_mode = ev->detail;
     XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
@@ -459,7 +484,7 @@ arrange(void)
     /* Master */
     if (master) {
         int master_width = (attr.width * mfact) - (GAP_WIDTH * 1.5) - (BORDER_WIDTH * 2);
-        XMoveResizeWindow(dpy, master->win, 
+        XMoveResizeWindow(dpy, master->win,
                         GAP_WIDTH,                    // x position
                         GAP_WIDTH,                    // y position
                         master_width,                 // width
@@ -475,7 +500,7 @@ arrange(void)
         for (c = clients; c; c = c->next) {
             if (!c->isfloating && c != master) {
                 int height = (attr.height / (n - 1)) - (GAP_WIDTH * 2) - (BORDER_WIDTH * 2);
-                XMoveResizeWindow(dpy, c->win, 
+                XMoveResizeWindow(dpy, c->win,
                                 x,                                         // x position
                                 (i * (height + GAP_WIDTH)) + GAP_WIDTH,   // y position with gap
                                 stack_width,                              // width
@@ -516,13 +541,13 @@ spawn(const char **arg)
     if (pid == 0) {
         if (dpy)
             close(ConnectionNumber(dpy));
-        
+
         /* Set clean environment variables */
         static char path[] = "PATH=/usr/local/bin:/usr/bin:/bin";
         static char home[] = "HOME=/home/kabuky";
         putenv(path);
         putenv(home);
-        
+
         setsid();
         execvp(((char **)arg)[0], (char **)arg);
         wm_log("Failed to execute: %s\n", arg[0]);
@@ -578,7 +603,7 @@ togglefullscreen(const char **arg __attribute__((unused)))
         sel->y = wa.y;
         sel->w = wa.width;
         sel->h = wa.height;
-        
+
         /* Remove borders and go full screen */
         XSetWindowBorderWidth(dpy, sel->win, 0);
         XMoveResizeWindow(dpy, sel->win, 0, 0, attr.width, attr.height);
@@ -587,7 +612,7 @@ togglefullscreen(const char **arg __attribute__((unused)))
         /* Restore borders and previous size */
         XSetWindowBorderWidth(dpy, sel->win, BORDER_WIDTH);
         XSetWindowBorder(dpy, sel->win, ACTIVE_BORDER);
-        XMoveResizeWindow(dpy, sel->win, sel->x, sel->y, sel->w, sel->h);  
+        XMoveResizeWindow(dpy, sel->win, sel->x, sel->y, sel->w, sel->h);
     }
 
     arrange();
@@ -602,23 +627,21 @@ killclient(const char **arg __attribute__((unused)))
 }
 
 void
-cleanup(void) {  
+cleanup(void) {
     Client *c, *tmp;
 
     // Clean up all managed windows
     c = clients;
     while (c) {
         tmp = c->next;
-        XUnmapWindow(dpy, c->win);
+        if (!running) // Only unmap windows if we're actually quitting
+            XUnmapWindow(dpy, c->win);
         free(c);
         c = tmp;
     }
 
     // Remove all keyboard shortcuts
-    for (long unsigned int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
-        XUngrabKey(dpy, XKeysymToKeycode(dpy, keys[i].keysym),
-                  keys[i].mod, root);
-    }
+    XUngrabKey(dpy, AnyKey, AnyModifier, root);
 }
 
 void
@@ -798,7 +821,7 @@ buttonrelease(XEvent *e __attribute__((unused)))
 
         /* Find client under pointer */
         for (c = clients; c; c = c->next) {
-            if (c->win == win_under && c != dragclient && 
+            if (c->win == win_under && c != dragclient &&
                 c->workspace == current_workspace) {
                 /* Swap windows in linked list */
                 Client *prev_drag = NULL, *prev_c = NULL;
@@ -851,11 +874,11 @@ motionnotify(XEvent *e)
 
     int dx = ev->x_root - dragx;
     int dy = ev->y_root - dragy;
-    
+
     /* Validate new window position */
     int new_x = dragclient->x + dx;
     int new_y = dragclient->y + dy;
-    
+
     if (validate_window_position(new_x, new_y)) {
         XMoveWindow(dpy, dragclient->win, new_x, new_y);
     }
@@ -892,15 +915,15 @@ showworkspace(const char **arg __attribute__((unused)))
     XFontStruct *font;
 
     snprintf(buf, sizeof(buf), "Workspace: %d", current_workspace);
-    
+
     /* Create centered notification window */
     wa.override_redirect = True;
-    wa.background_pixel = 0x282a36;  // Dark background
+    wa.background_pixel = 0x282a36;
     wa.border_pixel = ACTIVE_BORDER;
-    
+
     x = (attr.width - width) / 2;
     y = (attr.height - height) / 2;
-    
+
     w = XCreateWindow(dpy, root, x, y, width, height, 2,
                      DefaultDepth(dpy, screen), CopyFromParent,
                      DefaultVisual(dpy, screen),
@@ -909,12 +932,12 @@ showworkspace(const char **arg __attribute__((unused)))
     /* Load a font */
     font = XLoadQueryFont(dpy, "fixed");
     if (!font) font = XLoadQueryFont(dpy, "9x15");
-    
+
     /* Create GC for text */
-    gcv.foreground = 0xf8f8f2;  // Light text color
+    gcv.foreground = 0xf8f8f2;
     gcv.font = font->fid;
     gc = XCreateGC(dpy, w, GCForeground | GCFont, &gcv);
-    
+
     /* Calculate text position */
     int text_width = XTextWidth(font, buf, strlen(buf));
     int text_x = (width - text_width) / 2;
@@ -926,12 +949,69 @@ showworkspace(const char **arg __attribute__((unused)))
 
     /* Auto-destroy after 1 second */
     usleep(1000000);
-    
+
     /* Cleanup */
     XFreeGC(dpy, gc);
     XFreeFont(dpy, font);
     XDestroyWindow(dpy, w);
     XFlush(dpy);
+}
+
+void
+reload(const char **arg __attribute__((unused)))
+{
+    char path[PATH_MAX];
+    ssize_t len;
+
+    /* Get path to current executable */
+    len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len < 0) {
+        wm_log("Failed to get executable path\n");
+        return;
+    }
+    path[len] = '\0';
+
+    /* Ungrab all inputs */
+    XUngrabKey(dpy, AnyKey, AnyModifier, root);
+    XUngrabButton(dpy, AnyButton, AnyModifier, root);
+    XSync(dpy, False);
+
+    /* Keep track of existing windows */
+    Window *wins = NULL;
+    int num_wins = 0;
+    for (Client *c = clients; c; c = c->next) {
+        num_wins++;
+        wins = realloc(wins, sizeof(Window) * num_wins);
+        wins[num_wins - 1] = c->win;
+        XUnmapWindow(dpy, c->win);
+    }
+
+    /* Free client list */
+    while (clients) {
+        Client *tmp = clients->next;
+        free(clients);
+        clients = tmp;
+    }
+    clients = NULL;
+    sel = NULL;
+
+    /* Reexec self */
+    execl(path, path, NULL);
+    
+    /* If execl fails, restore windows */
+    for (int i = 0; i < num_wins; i++) {
+        XMapWindow(dpy, wins[i]);
+    }
+    free(wins);
+    
+    /* Regrab keys */
+    for (long unsigned int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
+        XGrabKey(dpy, XKeysymToKeycode(dpy, keys[i].keysym),
+                keys[i].mod, root, True,
+                GrabModeAsync, GrabModeAsync);
+    }
+    XSync(dpy, True);
+    wm_log("Failed to reload window manager\n");
 }
 
 int
@@ -994,7 +1074,6 @@ main(void)
     }
 
     wm_log("Exiting event loop\n");
-
     /* Clean up */
     XCloseDisplay(dpy);
     if (logfile)

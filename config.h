@@ -44,6 +44,7 @@ static const struct {
     { MODKEY, XK_c, spawn, digital_clockcmd }, // Launch digital clock
     { MODKEY, XK_Return, spawn, alacrittycmd }, // Open terminal emulator
     { SMODKEY, XK_s, spawn, powermenucmd },   // Open power menu
+    { SMODKEY, XK_r, reload, NULL },          // Reload window manager
     
     /* Window control */
     { MODKEY, XK_j, focusnext, NULL },        // Focus next window
