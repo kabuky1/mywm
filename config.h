@@ -11,11 +11,11 @@
 /* Key modifiers */
 #define MODKEY Mod4Mask         /* Super (Windows) key */
 #define SMODKEY Mod4Mask|ShiftMask  /* Super + Shift */
+#define CSMODKEY Mod4Mask|ControlMask /* Super + Control */
 
 /* External commands */
 static const char *roficmd[] = {"rofi", "-theme", "~/.config/rofi/config.rasi", "-show", "drun", "-location", "0", "-xoffset", "0", "-yoffset", "0", NULL};
 static const char *firefoxcmd[] = {"firefox", NULL};  // Web browser
-static const char *browsercmd[] = {"web-browser", NULL};
 static const char *wifi_choosercmd[] = {"wifi_chooser.sh", NULL};  // WiFi network selector
 static const char *digital_clockcmd[] = {"digital_clock", NULL};  // Digital clock
 static const char *alacrittycmd[] = {"alacritty", NULL};  // Terminal emulator
@@ -39,8 +39,7 @@ static const struct {
 } keys[] = {
     /* Launchers */
     { MODKEY, XK_p, spawn, roficmd },         // Open application launcher
-    { MODKEY, XK_w, spawn, browsercmd },      // Launch web-browser
-    { MODKEY, XK_f, spawn, firefoxcmd },      // Launch firefox
+    { MODKEY, XK_w, spawn, firefoxcmd },      // Launch Firefox
     { SMODKEY, XK_w, spawn, wifi_choosercmd }, // Open WiFi selector
     { MODKEY, XK_c, spawn, digital_clockcmd }, // Launch digital clock
     { MODKEY, XK_Return, spawn, alacrittycmd }, // Open terminal emulator
@@ -69,22 +68,31 @@ static const struct {
     /* Workspace control */
     { SMODKEY, XK_1, sendtoworkspace, (const char *[]){"1", NULL} },      /* Move window to workspace 1 */
     { MODKEY, XK_1, switchworkspace, (const char *[]){"1", NULL} },     /* Switch to workspace 1 */
+    { CSMODKEY, XK_1, clearworkspace, (const char *[]){"1", NULL} },     /* Clear workspace 1 */
     { SMODKEY, XK_2, sendtoworkspace, (const char *[]){"2", NULL} },      /* Move window to workspace 2 */
     { MODKEY, XK_2, switchworkspace, (const char *[]){"2", NULL} },     /* Switch to workspace 2 */
+    { CSMODKEY, XK_2, clearworkspace, (const char *[]){"2", NULL} },     /* Clear workspace 2 */
     { SMODKEY, XK_3, sendtoworkspace, (const char *[]){"3", NULL} },      /* Move window to workspace 3 */
     { MODKEY, XK_3, switchworkspace, (const char *[]){"3", NULL} },     /* Switch to workspace 3 */
+    { CSMODKEY, XK_3, clearworkspace, (const char *[]){"3", NULL} },      /* Move window to workspace 4 */
     { SMODKEY, XK_4, sendtoworkspace, (const char *[]){"4", NULL} },      /* Move window to workspace 4 */
     { MODKEY, XK_4, switchworkspace, (const char *[]){"4", NULL} },     /* Switch to workspace 4 */
+    { CSMODKEY, XK_4, clearworkspace, (const char *[]){"4", NULL} },     /* Clear workspace 4 */
     { SMODKEY, XK_5, sendtoworkspace, (const char *[]){"5", NULL} },      /* Move window to workspace 5 */
     { MODKEY, XK_5, switchworkspace, (const char *[]){"5", NULL} },     /* Switch to workspace 5 */
+    { CSMODKEY, XK_5, clearworkspace, (const char *[]){"5", NULL} },     /* Clear workspace 5 */
     { SMODKEY, XK_6, sendtoworkspace, (const char *[]){"6", NULL} },      /* Move window to workspace 6 */
     { MODKEY, XK_6, switchworkspace, (const char *[]){"6", NULL} },     /* Switch to workspace 6 */
+    { CSMODKEY, XK_6, clearworkspace, (const char *[]){"6", NULL} },     /* Clear workspace 6 */
     { SMODKEY, XK_7, sendtoworkspace, (const char *[]){"7", NULL} },      /* Move window to workspace 7 */
     { MODKEY, XK_7, switchworkspace, (const char *[]){"7", NULL} },     /* Switch to workspace 7 */
+    { CSMODKEY, XK_7, clearworkspace, (const char *[]){"7", NULL} },     /* Clear workspace 7 */
     { SMODKEY, XK_8, sendtoworkspace, (const char *[]){"8", NULL} },      /* Move window to workspace 8 */
     { MODKEY, XK_8, switchworkspace, (const char *[]){"8", NULL} },     /* Switch to workspace 8 */
+    { CSMODKEY, XK_8, clearworkspace, (const char *[]){"8", NULL} },     /* Clear workspace 8 */
     { SMODKEY, XK_9, sendtoworkspace, (const char *[]){"9", NULL} },      /* Move window to workspace 9 */
     { MODKEY, XK_9, switchworkspace, (const char *[]){"9", NULL} },     /* Switch to workspace 9 */    
+    { CSMODKEY, XK_9, clearworkspace, (const char *[]){"9", NULL} },     /* Clear workspace 9 */
 };
 
 /* Window manager settings */

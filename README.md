@@ -56,8 +56,7 @@ sudo pacman -S xorg-server base-devel libx11 libxft libxinerama
 
 ### Applications
 - `Super + p` - Launch application menu (rofi)
-- `Super + f` - Launch Firefox
-- 'Super + w' - Launch Web-browser
+- `Super + w` - Launch Firefox
 - `Super + Shift + w` - Launch WiFi selector
 - `Super + c` - Launch digital clock
 - `Super + Return` - Launch terminal (alacritty)

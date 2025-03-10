@@ -49,6 +49,7 @@ static void killclient(const char **arg);
 static void buttonpress(XEvent *e);
 static void buttonrelease(XEvent *e);
 static void motionnotify(XEvent *e);
+static void clearworkspace(const char **arg);
 
 #include "config.h"
 
@@ -712,6 +713,25 @@ motionnotify(XEvent *e)
     XMoveWindow(dpy, dragclient->win,
                 dragclient->x + dx,
                 dragclient->y + dy);
+}
+
+void
+clearworkspace(const char **arg)
+{
+    if (!arg || !arg[0])
+        return;
+
+    int workspace = atoi(arg[0]);
+    if (workspace < 1 || workspace > 9)
+        return;
+
+    Client *c, *next;
+    for (c = clients; c; c = next) {
+        next = c->next;
+        if (c->workspace == workspace) {
+            XKillClient(dpy, c->win);
+        }
+    }
 }
 
 int
