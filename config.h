@@ -93,6 +93,7 @@ static const struct {
     { SMODKEY, XK_9, sendtoworkspace, (const char *[]){"9", NULL} },      /* Move window to workspace 9 */
     { MODKEY, XK_9, switchworkspace, (const char *[]){"9", NULL} },     /* Switch to workspace 9 */    
     { CSMODKEY, XK_9, clearworkspace, (const char *[]){"9", NULL} },     /* Clear workspace 9 */
+    { MODKEY, XK_Escape, showworkspace, NULL },  /* Show current workspace number */
 };
 
 /* Window manager settings */

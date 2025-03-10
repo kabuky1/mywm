@@ -51,6 +51,7 @@ static void buttonpress(XEvent *e);
 static void buttonrelease(XEvent *e);
 static void motionnotify(XEvent *e);
 static void clearworkspace(const char **arg);
+static void showworkspace(const char **arg);
 
 #include "config.h"
 
@@ -877,6 +878,60 @@ clearworkspace(const char **arg)
             XKillClient(dpy, c->win);
         }
     }
+}
+
+void
+showworkspace(const char **arg __attribute__((unused)))
+{
+    char buf[32];
+    Window w;
+    XSetWindowAttributes wa;
+    GC gc;
+    XGCValues gcv;
+    int x, y, width = 200, height = 50;
+    XFontStruct *font;
+
+    snprintf(buf, sizeof(buf), "Workspace: %d", current_workspace);
+    
+    /* Create centered notification window */
+    wa.override_redirect = True;
+    wa.background_pixel = 0x282a36;  // Dark background
+    wa.border_pixel = ACTIVE_BORDER;
+    
+    x = (attr.width - width) / 2;
+    y = (attr.height - height) / 2;
+    
+    w = XCreateWindow(dpy, root, x, y, width, height, 2,
+                     DefaultDepth(dpy, screen), CopyFromParent,
+                     DefaultVisual(dpy, screen),
+                     CWOverrideRedirect | CWBackPixel | CWBorderPixel, &wa);
+
+    /* Load a font */
+    font = XLoadQueryFont(dpy, "fixed");
+    if (!font) font = XLoadQueryFont(dpy, "9x15");
+    
+    /* Create GC for text */
+    gcv.foreground = 0xf8f8f2;  // Light text color
+    gcv.font = font->fid;
+    gc = XCreateGC(dpy, w, GCForeground | GCFont, &gcv);
+    
+    /* Calculate text position */
+    int text_width = XTextWidth(font, buf, strlen(buf));
+    int text_x = (width - text_width) / 2;
+    int text_y = height / 2 + font->ascent / 2;
+
+    XMapRaised(dpy, w);
+    XDrawString(dpy, w, gc, text_x, text_y, buf, strlen(buf));
+    XFlush(dpy);
+
+    /* Auto-destroy after 1 second */
+    usleep(1000000);
+    
+    /* Cleanup */
+    XFreeGC(dpy, gc);
+    XFreeFont(dpy, font);
+    XDestroyWindow(dpy, w);
+    XFlush(dpy);
 }
 
 int
