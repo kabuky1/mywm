@@ -2,6 +2,7 @@ wm
 wm.log
 *.o
 need*
+.vscode
 .vsode/*
 .vscode/settings.json
 .vscode/tasks.json
