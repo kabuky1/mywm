@@ -418,8 +418,25 @@ focus(Client *c)
 void
 arrange(void)
 {
-    Client *c, *master = NULL;
+    Client *c;
+    Client *master = NULL;  // Add this declaration
     int n = 0, visible = 0;
+
+    /* First pass: count windows and reset positions */
+    for (c = clients; c; c = c->next) {
+        if (c->workspace == current_workspace) {
+            if (!c->isfloating && !c->isfullscreen)
+                n++;
+            visible++;
+            
+            /* Reset any invalid positions */
+            if (c->x < -BORDER_WIDTH || c->y < -BORDER_WIDTH ||
+                c->x > attr.width || c->y > attr.height) {
+                c->x = GAP_WIDTH;
+                c->y = GAP_WIDTH;
+            }
+        }
+    }
 
     /* Handle fullscreen windows first */
     Client *fs = find_fullscreen();
@@ -427,26 +444,18 @@ arrange(void)
         XSetWindowBorderWidth(dpy, fs->win, 0);
         XMoveResizeWindow(dpy, fs->win, 0, 0, attr.width, attr.height);
         XRaiseWindow(dpy, fs->win);
+        
+        /* Hide other windows in this workspace */
+        for (c = clients; c; c = c->next) {
+            if (c != fs && c->workspace == current_workspace) {
+                XMoveWindow(dpy, c->win, c->x, c->y);
+                XLowerWindow(dpy, c->win);
+            }
+        }
         return;
     }
 
-    /* Count non-floating windows in current workspace and visible windows */
-    for (c = clients; c; c = c->next) {
-        if (!c->isfloating && !c->isfullscreen && c->workspace == current_workspace)
-            n++;
-        if (c->workspace == current_workspace && !c->isfullscreen)
-            visible++;
-    }
-
-    /* Position floating windows first */
-    for (c = clients; c; c = c->next) {
-        if (c->isfloating && c->workspace == current_workspace) {
-            XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-            continue;
-        }
-    }
-
-    /* If only one visible window in workspace, make it fullscreen without borders */
+    /* If only one visible window, make it fullscreen without borders */
     if (visible == 1) {
         for (c = clients; c; c = c->next) {
             if (c->workspace == current_workspace) {
@@ -962,7 +971,7 @@ reload(const char **arg __attribute__((unused)))
 {
     char path[PATH_MAX];
     ssize_t len;
-
+    
     /* Get path to current executable */
     len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len < 0) {
@@ -971,47 +980,128 @@ reload(const char **arg __attribute__((unused)))
     }
     path[len] = '\0';
 
-    /* Ungrab all inputs */
+    /* Gracefully close all windows */
+    Client *c;
+    XEvent ev;
+    for (c = clients; c; c = c->next) {
+        /* Send WM_DELETE_WINDOW message first */
+        ev.type = ClientMessage;
+        ev.xclient.window = c->win;
+        ev.xclient.message_type = XInternAtom(dpy, "WM_PROTOCOLS", True);
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = XInternAtom(dpy, "WM_DELETE_WINDOW", True);
+        ev.xclient.data.l[1] = CurrentTime;
+        XSendEvent(dpy, c->win, False, NoEventMask, &ev);
+        
+        /* Wait a bit for the client to respond */
+        usleep(100000);  /* 100ms */
+        
+        /* If window still exists, force kill it */
+        if (XGetWindowAttributes(dpy, c->win, &attr)) {
+            XKillClient(dpy, c->win);
+        }
+    }
+    
+    /* Wait for all windows to close */
+    usleep(500000);  /* 500ms */
+    
+    /* Release all grabs */
     XUngrabKey(dpy, AnyKey, AnyModifier, root);
     XUngrabButton(dpy, AnyButton, AnyModifier, root);
     XSync(dpy, False);
 
-    /* Keep track of existing windows */
-    Window *wins = NULL;
-    int num_wins = 0;
-    for (Client *c = clients; c; c = c->next) {
-        num_wins++;
-        wins = realloc(wins, sizeof(Window) * num_wins);
-        wins[num_wins - 1] = c->win;
-        XUnmapWindow(dpy, c->win);
-    }
-
-    /* Free client list */
-    while (clients) {
-        Client *tmp = clients->next;
-        free(clients);
-        clients = tmp;
-    }
-    clients = NULL;
-    sel = NULL;
-
-    /* Reexec self */
+    /* Clean up and close display */
+    cleanup();
+    XCloseDisplay(dpy);
+    
+    /* Exec new instance */
     execl(path, path, NULL);
     
-    /* If execl fails, restore windows */
-    for (int i = 0; i < num_wins; i++) {
-        XMapWindow(dpy, wins[i]);
-    }
-    free(wins);
-    
-    /* Regrab keys */
-    for (long unsigned int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
-        XGrabKey(dpy, XKeysymToKeycode(dpy, keys[i].keysym),
-                keys[i].mod, root, True,
-                GrabModeAsync, GrabModeAsync);
-    }
-    XSync(dpy, True);
     wm_log("Failed to reload window manager\n");
+}
+
+/* Add this function after scan() */
+static void
+adopt_windows(void)
+{
+    Atom type;
+    int format;
+    unsigned long num_items, bytes_after;
+    unsigned char *data = NULL;
+    Window *wins;
+    unsigned long *workspaces;
+
+    /* Get saved windows */
+    if (XGetWindowProperty(dpy, root, XInternAtom(dpy, "_WM_WINDOWS", False),
+                          0, 1024, True, XA_WINDOW,
+                          &type, &format, &num_items, &bytes_after, &data) == Success && data) {
+        wins = (Window *)data;
+        
+        /* Get saved workspaces */
+        if (XGetWindowProperty(dpy, root, XInternAtom(dpy, "_WM_WORKSPACES", False),
+                              0, 1024, True, XA_CARDINAL,
+                              &type, &format, &num_items, &bytes_after, &data) == Success && data) {
+            workspaces = (unsigned long *)data;
+            
+            /* Get window states */
+            unsigned char *states = NULL;
+            if (XGetWindowProperty(dpy, root, XInternAtom(dpy, "_WM_WINDOW_STATES", False),
+                                  0, 1024, True, XA_CARDINAL,
+                                  &type, &format, &num_items, &bytes_after, &data) == Success && data) {
+                states = (unsigned char *)data;
+            }
+
+            /* Readopt windows */
+            for (unsigned long i = 0; i < num_items; i++) {
+                Client *c = malloc(sizeof(Client));
+                if (!c) continue;
+                
+                XWindowAttributes wa;
+                if (!XGetWindowAttributes(dpy, wins[i], &wa)) {
+                    free(c);
+                    continue;
+                }
+                
+                c->win = wins[i];
+                c->workspace = workspaces[i];
+                c->next = clients;
+                c->isfloating = states ? states[i] : 0;
+                c->isfullscreen = 0;
+                c->x = wa.x;
+                c->y = wa.y;
+                c->w = wa.width;
+                c->h = wa.height;
+                clients = c;
+                
+                /* Reset window attributes */
+                XSetWindowAttributes swa;
+                swa.event_mask = EnterWindowMask | KeyPressMask;
+                swa.override_redirect = True;
+                swa.border_pixel = INACTIVE_BORDER;
+                XChangeWindowAttributes(dpy, c->win, 
+                                     CWEventMask | CWOverrideRedirect | CWBorderPixel,
+                                     &swa);
+
+                /* Reattach our event handlers */
+                XGrabButton(dpy, Button1, MODKEY, c->win, True,
+                           ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                           GrabModeAsync, GrabModeAsync, None, None);
+                
+                if (c->workspace == current_workspace) {
+                    XMapWindow(dpy, c->win);
+                    XSetInputFocus(dpy, c->win, RevertToPointerRoot, CurrentTime);
+                    sel = c;  // Make this the selected window
+                }
+            }
+            if (states)
+                XFree(states);
+            XFree(workspaces);
+        }
+        XFree(wins);
+    }
+
+    /* Final arrange after adoption */
+    arrange();
 }
 
 int
@@ -1065,6 +1155,7 @@ main(void)
     wm_log("Entering event loop\n");
 
     scan();
+    adopt_windows();  /* Add this line after scan() */
 
     /* Main event loop */
     while (running && !XNextEvent(dpy, &ev)) {

@@ -1,112 +1,81 @@
-# Minimalist Window Manager
+# Minimal X11 Window Manager
 
-A lightweight X11 window manager with workspaces and window isolation.
+A lightweight, customizable window manager written in C for X11.
 
 ## Features
 
-- Tiling window management
+- Dynamic tiling layout with master/stack configuration
 - Multiple workspaces (1-9)
-- Window isolation (windows can only communicate via clipboard)
-- Smart borders (hidden for single/fullscreen windows)
-- Master-stack layout with gaps
 - Floating window support
-- Per-workspace window limits
-- Automatic fullscreen for single windows
-- Colored borders for active/inactive windows
-- Drag and drop window swapping
+- Fullscreen mode
+- Window gaps
+- Workspace indicators
+- Live config reload
+- Configurable keybindings
+- Child window handling for fullscreen applications
 
-## Installation Prerequisites
+## Dependencies
 
-### X Server
-You'll need a running Xorg server. Most Linux distributions include this by default, but if not:
-
-### Debian/Ubuntu
-```bash
-sudo apt install xorg build-essential libx11-dev libxft-dev libxinerama-dev
-```
-
-### Fedora
-```bash
-sudo dnf install xorg-x11-server-Xorg gcc libX11-devel libXft-devel libXinerama-devel
-```
-
-### Arch Linux
-```bash
-sudo pacman -S xorg-server base-devel libx11 libxft libxinerama
-```
-
-## Default Keybindings
-
-### Window Management
-- `Super + j` - Focus next window
-- `Super + k` - Focus previous window
-- `Super + Space` - Toggle floating mode
-- `Super + Shift + Return` - Swap focused window with master
-- `Super + Shift + c` - Kill focused window
-- `Super + Shift + f` - Toggle fullscreen mode
-- `Super + Left Click + Drag` - Drag window to swap position with another window
-
-### Workspace Control
-- `Super + [1-9]` - Switch to workspace 1-9
-- `Super + Shift + [1-9]` - Move focused window to workspace 1-9
-
-### Layout Control
-- `Super + h` - Decrease master area
-- `Super + l` - Increase master area
-
-### Applications
-- `Super + p` - Launch application menu (rofi)
-- `Super + w` - Launch Firefox
-- `Super + Shift + w` - Launch WiFi selector
-- `Super + c` - Launch digital clock
-- `Super + Return` - Launch terminal (alacritty)
-- `Super + Shift + s` - Launch power menu
-
-### System Controls
-- `XF86AudioRaiseVolume` - Volume up
-- `XF86AudioLowerVolume` - Volume down
-- `XF86AudioMute` - Toggle mute
-- `XF86MonBrightnessUp` - Brightness up
-- `XF86MonBrightnessDown` - Brightness down
-
-### Session
-- `Super + Shift + q` - Quit window manager
-
-## Building
-
-Requirements:
-- GCC or compatible C compiler
 - X11 development libraries
+- gcc
 - make
+- rofi (for application launcher)
+- alacritty (default terminal)
+- pactl (for volume control)
+- brightnessctl (for brightness control)
 
-To build:
+## Installation
+
 ```bash
+# Install dependencies (for Arch Linux)
+sudo pacman -S libx11 gcc make rofi alacritty pulseaudio brightnessctl
+
+# Clone and build
+git clone https://github.com/kabuky1/wm.git
+cd wm
 make
+make install
 ```
-
-## Running
-
-1. Make sure you have a running X server
-2. Add the following to your ~/.xinitrc:
-   ```bash
-   exec /path/to/wm
-   ```
-3. Start X with `startx`
 
 ## Configuration
 
-The window manager can be configured by editing:
-- `config.h` - Keybindings and general settings
+Edit `config.h` to customize:
+- Keybindings
+- Colors
+- Border width
+- Gap size
+- Window limits
+- External commands
 
-### Important Settings
-- `MAX_WINDOWS`: Maximum windows per workspace (default: 5)
-- `BORDER_WIDTH`: Window border size in pixels (default: 2)
-- `MASTER_SIZE`: Default master area ratio (default: 0.45)
-- `GAP_WIDTH`: Size of gaps between windows (default: 5)
-- `ACTIVE_BORDER`: Color of focused window border (default: purple)
-- `INACTIVE_BORDER`: Color of unfocused window borders (default: dark grey)
+## Default Keybindings
 
-Rebuild after making changes:
-```bash
-make clean install
-```
+### System
+- Super + Shift + r: Reload window manager
+- Super + Shift + q: Quit window manager
+- Super + Escape: Show current workspace
+
+### Window Management
+- Super + j/k: Focus next/previous window
+- Super + Shift + f: Toggle fullscreen
+- Super + Space: Toggle floating
+- Super + h/l: Decrease/increase master area
+- Super + Shift + Return: Swap with master
+- Super + Shift + c: Close window
+
+### Workspaces
+- Super + [1-9]: Switch to workspace
+- Super + Shift + [1-9]: Move window to workspace
+- Super + Control + [1-9]: Clear workspace
+
+### Launchers
+- Super + p: Application launcher (rofi)
+- Super + Return: Terminal (alacritty)
+- Super + w: Web browser (firefox)
+
+## Logging
+
+Logs are written to `~/.local/share/wm/wm.log`
+
+## License
+
+MIT License
