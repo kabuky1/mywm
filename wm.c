@@ -517,8 +517,10 @@ spawn(const char **arg)
             close(ConnectionNumber(dpy));
         
         /* Set clean environment variables */
-        putenv("PATH=/usr/local/bin:/usr/bin:/bin");
-        putenv("HOME=/home/kabuky");
+        static char path[] = "PATH=/usr/local/bin:/usr/bin:/bin";
+        static char home[] = "HOME=/home/kabuky";
+        putenv(path);
+        putenv(home);
         
         setsid();
         execvp(((char **)arg)[0], (char **)arg);
@@ -777,7 +779,7 @@ buttonpress(XEvent *e)
 }
 
 void
-buttonrelease(XEvent *e)
+buttonrelease(XEvent *e __attribute__((unused)))
 {
     Client *c;
     Window dummy;

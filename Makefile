@@ -1,23 +1,26 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
-LDFLAGS = -lX11
+CFLAGS = -Wall -Wextra -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -pie \
+         -Wformat -Wformat-security -Werror=format-security \
+         -fno-strict-aliasing -fno-common \
+         -Wcast-align -Wunused-parameter -Wpointer-arith \
+         -Wnested-externs -Winline -Wwrite-strings
+LDFLAGS = -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+LIBS = -lX11
 
-PREFIX = $(HOME)/.local
-BINDIR = $(PREFIX)/bin
+SRC = wm.c
+OBJ = $(SRC:.c=.o)
+TARGET = wm
 
-all: wm
+$(TARGET): $(OBJ)
+	$(CC) $(OBJ) $(LDFLAGS) $(LIBS) -o $@
 
-wm: wm.o
-	$(CC) -o $@ $^ $(LDFLAGS)
-
-wm.o: wm.c config.h
-	$(CC) $(CFLAGS) -c $<
-
-install: wm
-	mkdir -p $(BINDIR)
-	install -m 755 wm $(BINDIR)/wm
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f wm *.o
+	rm -f $(OBJ) $(TARGET)
 
-.PHONY: all clean install
+install: $(TARGET)
+	install -m 755 $(TARGET) /home/kabuky/.local/bin
+
+.PHONY: clean install
