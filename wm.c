@@ -139,11 +139,44 @@ find_fullscreen(void)
     return NULL;
 }
 
+/* Add these validation functions near the top */
+static int
+validate_window_size(int w, int h) {
+    return (w >= MIN_WIN_SIZE && h >= MIN_WIN_SIZE && 
+            w <= attr.width && h <= attr.height);
+}
+
+static int
+validate_window_position(int x, int y) {
+    return (x >= -BORDER_WIDTH && y >= -BORDER_WIDTH &&
+            x <= attr.width && y <= attr.height);
+}
+
 void
 maprequest(XEvent *e)
 {
+    if (!e) return;
     XMapRequestEvent *ev = &e->xmaprequest;
     Client *c;
+    XWindowAttributes wa;
+
+    /* Validate the window exists and can be accessed */
+    if (!XGetWindowAttributes(dpy, ev->window, &wa)) {
+        wm_log("Invalid window in maprequest\n");
+        return;
+    }
+
+    /* Validate window size */
+    if (!validate_window_size(wa.width, wa.height)) {
+        wm_log("Invalid window size: %dx%d\n", wa.width, wa.height);
+        return;
+    }
+
+    /* Validate window position */
+    if (!validate_window_position(wa.x, wa.y)) {
+        wm_log("Invalid window position: %d,%d\n", wa.x, wa.y);
+        return;
+    }
 
     /* Check if we've reached the maximum for current workspace */
     if (count_windows_in_workspace(current_workspace) >= MAX_WINDOWS) {
@@ -154,22 +187,26 @@ maprequest(XEvent *e)
 
     /* Add the window to our list */
     c = malloc(sizeof(Client));
+    if (!c) {
+        wm_log("Fatal: failed to allocate memory for new client\n");
+        return;
+    }
     c->win = ev->window;
     c->next = clients;
     c->isfloating = 0;
-    c->isfullscreen = 0;  // Initialize fullscreen state
+    c->isfullscreen = 0;
     c->workspace = current_workspace;
     clients = c;
     sel = c;
 
     /* Set up window isolation */
-    XSetWindowAttributes wa;
-    wa.event_mask = EnterWindowMask | KeyPressMask;
-    wa.override_redirect = True;  // Prevent direct window communication
-    wa.border_pixel = INACTIVE_BORDER;
+    XSetWindowAttributes swa;  // Changed variable name to swa
+    swa.event_mask = EnterWindowMask | KeyPressMask;
+    swa.override_redirect = True;  // Prevent direct window communication
+    swa.border_pixel = INACTIVE_BORDER;
     XChangeWindowAttributes(dpy, ev->window, 
                           CWEventMask | CWOverrideRedirect | CWBorderPixel, 
-                          &wa);
+                          &swa);
 
     /* Set initial border width */
     XSetWindowBorderWidth(dpy, ev->window, BORDER_WIDTH);
@@ -237,8 +274,21 @@ destroynotify(XEvent *e)
 void
 configurerequest(XEvent *e)
 {
+    if (!e) return;
     XConfigureRequestEvent *ev = &e->xconfigurerequest;
     XWindowChanges wc;
+
+    /* Validate requested dimensions */
+    if (!validate_window_size(ev->width, ev->height)) {
+        wm_log("Invalid configure request size: %dx%d\n", ev->width, ev->height);
+        return;
+    }
+
+    /* Validate requested position */
+    if (!validate_window_position(ev->x, ev->y)) {
+        wm_log("Invalid configure request position: %d,%d\n", ev->x, ev->y);
+        return;
+    }
 
     wc.x = ev->x;
     wc.y = ev->y;
@@ -531,8 +581,14 @@ swapmaster(const char **arg __attribute__((unused)))
 void
 enternotify(XEvent *e)
 {
+    if (!e) return;
     XCrossingEvent *ev = &e->xcrossing;
     Client *c;
+
+    /* Validate crossing event */
+    if (ev->mode != NotifyNormal || ev->detail == NotifyInferior) {
+        return;
+    }
 
     for (c = clients; c; c = c->next) {
         if (c->win == ev->window) {
@@ -555,10 +611,15 @@ scan(void)
     for (unsigned int i = 0; i < nchildren; i++) {
         if (children[i] != root) {
             c = malloc(sizeof(Client));
+            if (!c) {
+                wm_log("Fatal: failed to allocate memory for client during scan\n");
+                if (children) XFree(children);
+                return;
+            }
             c->win = children[i];
             c->next = clients;
             c->isfloating = 0;
-            c->isfullscreen = 0;  // Initialize fullscreen state
+            c->isfullscreen = 0;
             clients = c;
             XMapWindow(dpy, children[i]);
         }
@@ -619,8 +680,15 @@ switchworkspace(const char **arg)
 void
 buttonpress(XEvent *e)
 {
+    if (!e) return;
     XButtonEvent *ev = &e->xbutton;
     Client *c;
+
+    /* Validate button press coordinates */
+    if (!validate_window_position(ev->x_root, ev->y_root)) {
+        wm_log("Invalid button press coordinates: %d,%d\n", ev->x_root, ev->y_root);
+        return;
+    }
 
     for (c = clients; c; c = c->next) {
         if (c->win == ev->window) {
@@ -703,16 +771,25 @@ buttonrelease(XEvent *e)
 void
 motionnotify(XEvent *e)
 {
-    if (!drag_started)
-        return;
-
+    if (!e || !dragclient || !drag_started) return;
     XMotionEvent *ev = &e->xmotion;
+
+    /* Validate motion coordinates */
+    if (!validate_window_position(ev->x_root, ev->y_root)) {
+        wm_log("Invalid motion coordinates: %d,%d\n", ev->x_root, ev->y_root);
+        return;
+    }
+
     int dx = ev->x_root - dragx;
     int dy = ev->y_root - dragy;
     
-    XMoveWindow(dpy, dragclient->win,
-                dragclient->x + dx,
-                dragclient->y + dy);
+    /* Validate new window position */
+    int new_x = dragclient->x + dx;
+    int new_y = dragclient->y + dy;
+    
+    if (validate_window_position(new_x, new_y)) {
+        XMoveWindow(dpy, dragclient->win, new_x, new_y);
+    }
 }
 
 void
