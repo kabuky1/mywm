@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <time.h>
 #include <stdarg.h>
+#include <linux/limits.h> 
 
 /* Function declarations */
 void cleanup(void);  
@@ -150,6 +151,59 @@ static int
 validate_window_position(int x, int y) {
     return (x >= -BORDER_WIDTH && y >= -BORDER_WIDTH &&
             x <= attr.width && y <= attr.height);
+}
+
+/* Add these validation functions after the other validation functions */
+static int
+validate_spawn_args(const char **arg) {
+    if (!arg || !arg[0]) {
+        wm_log("Invalid spawn arguments: NULL\n");
+        return 0;
+    }
+
+    /* Check for command injection attempts */
+    for (int i = 0; arg[i]; i++) {
+        if (strchr(arg[i], ';') || strchr(arg[i], '|') || 
+            strchr(arg[i], '&') || strchr(arg[i], '`')) {
+            wm_log("Rejected spawn command with invalid characters: %s\n", arg[i]);
+            return 0;
+        }
+    }
+
+    /* Validate executable path */
+    char *path = getenv("PATH");
+    if (!path) {
+        wm_log("Cannot get PATH environment\n");
+        return 0;
+    }
+
+    char *path_copy = strdup(path);
+    if (!path_copy) {
+        wm_log("Failed to allocate memory for path validation\n");
+        return 0;
+    }
+
+    char *dir = strtok(path_copy, ":");
+    char full_path[PATH_MAX];
+    int found = 0;
+
+    while (dir) {
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir, arg[0]);
+        if (access(full_path, X_OK) == 0) {
+            found = 1;
+            break;
+        }
+        dir = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+
+    if (!found) {
+        wm_log("Command not found in PATH: %s\n", arg[0]);
+        return 0;
+    }
+
+    return 1;
 }
 
 void
@@ -453,12 +507,25 @@ focusprev(const char **arg __attribute__((unused)))
 void
 spawn(const char **arg)
 {
-    if (fork() == 0) {
+    if (!validate_spawn_args(arg))
+        return;
+
+    /* Fork and execute command */
+    pid_t pid = fork();
+    if (pid == 0) {
         if (dpy)
             close(ConnectionNumber(dpy));
+        
+        /* Set clean environment variables */
+        putenv("PATH=/usr/local/bin:/usr/bin:/bin");
+        putenv("HOME=/home/kabuky");
+        
         setsid();
         execvp(((char **)arg)[0], (char **)arg);
-        exit(0);
+        wm_log("Failed to execute: %s\n", arg[0]);
+        exit(1);
+    } else if (pid < 0) {
+        wm_log("Fork failed for spawn command: %s\n", arg[0]);
     }
 }
 
@@ -712,7 +779,6 @@ buttonpress(XEvent *e)
 void
 buttonrelease(XEvent *e)
 {
-    XButtonEvent *ev = &e->xbutton;
     Client *c;
     Window dummy;
     int rx, ry, x, y;
