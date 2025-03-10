@@ -3,3 +3,7 @@ wm.log
 *.o
 need*
 .vsode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
