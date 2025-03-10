@@ -16,10 +16,10 @@
 /* External commands */
 static const char *roficmd[] = {"rofi", "-theme", "~/.config/rofi/config.rasi", "-show", "drun", "-location", "0", "-xoffset", "0", "-yoffset", "0", NULL};
 static const char *firefoxcmd[] = {"firefox", NULL};  // Web browser
-static const char *wifi_choosercmd[] = {"wifi_chooser.sh", NULL};  // WiFi network selector
+static const char *wifi_choosercmd[] = {"~/.local/bin/wifi_chooser.sh", NULL};  // WiFi network selector 
 static const char *digital_clockcmd[] = {"digital_clock", NULL};  // Digital clock
 static const char *alacrittycmd[] = {"alacritty", NULL};  // Terminal emulator
-static const char *powermenucmd[] = {"powermenu.sh", NULL};  // Power menu
+static const char *powermenucmd[] = {"~/.local/bin/powermenu.sh", NULL};  // Power menu s
 static const char *volupcmd[] = {"pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%", NULL};  // Volume up
 static const char *voldowncmd[] = {"pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%", NULL};  // Volume down
 static const char *volmutecmd[] = {"pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle", NULL};  // Mute volume

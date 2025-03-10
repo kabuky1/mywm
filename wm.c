@@ -163,7 +163,13 @@ validate_spawn_args(const char **arg) {
         return 0;
     }
 
-    /* Check for command injection attempts */
+    /* Always allow shell scripts without path validation */
+    if (strstr(arg[0], ".sh")) {
+        wm_log("Allowing shell script: %s\n", arg[0]);
+        return 1;
+    }
+
+    /* For non-scripts, validate as before */
     for (int i = 0; arg[i]; i++) {
         if (strchr(arg[i], ';') || strchr(arg[i], '|') ||
             strchr(arg[i], '&') || strchr(arg[i], '`')) {
@@ -552,13 +558,31 @@ spawn(const char **arg)
             close(ConnectionNumber(dpy));
 
         /* Set clean environment variables */
-        static char path[] = "PATH=/usr/local/bin:/usr/bin:/bin";
-        static char home[] = "HOME=/home/kabuky";
+        const char *home = getenv("HOME");
+        char path[1024];
+        snprintf(path, sizeof(path), "PATH=/usr/local/bin:/usr/bin:/bin:%s/.local/bin", home);
+        char home_env[512];
+        snprintf(home_env, sizeof(home_env), "HOME=%s", home);
         putenv(path);
-        putenv(home);
+        putenv(home_env);
 
         setsid();
-        execvp(((char **)arg)[0], (char **)arg);
+
+        /* For shell scripts, expand path and use sh directly */
+        if (strstr(arg[0], ".sh")) {
+            char expanded_path[PATH_MAX];
+            if (arg[0][0] == '~') {
+                snprintf(expanded_path, sizeof(expanded_path), "%s%s", home, arg[0] + 1);
+            } else {
+                strncpy(expanded_path, arg[0], sizeof(expanded_path) - 1);
+            }
+            
+            const char *const sh_args[] = {"/bin/sh", expanded_path, NULL};
+            execv("/bin/sh", (char *const*)sh_args);
+        } else {
+            execvp(arg[0], (char *const*)arg);
+        }
+        
         wm_log("Failed to execute: %s\n", arg[0]);
         exit(1);
     } else if (pid < 0) {
@@ -971,49 +995,96 @@ reload(const char **arg __attribute__((unused)))
 {
     char path[PATH_MAX];
     ssize_t len;
-    
+    Window *wins = NULL;
+    int *workspaces = NULL;
+    int num_wins = 0;
+    Display *new_dpy;
+
+    /* Try to open new display connection before closing the old one */
+    new_dpy = XOpenDisplay(NULL);
+    if (!new_dpy) {
+        wm_log("Failed to open new display connection for reload\n");
+        return;
+    }
+
     /* Get path to current executable */
     len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len < 0) {
         wm_log("Failed to get executable path\n");
+        XCloseDisplay(new_dpy);
         return;
     }
     path[len] = '\0';
 
-    /* Gracefully close all windows */
-    Client *c;
-    XEvent ev;
-    for (c = clients; c; c = c->next) {
-        /* Send WM_DELETE_WINDOW message first */
-        ev.type = ClientMessage;
-        ev.xclient.window = c->win;
-        ev.xclient.message_type = XInternAtom(dpy, "WM_PROTOCOLS", True);
-        ev.xclient.format = 32;
-        ev.xclient.data.l[0] = XInternAtom(dpy, "WM_DELETE_WINDOW", True);
-        ev.xclient.data.l[1] = CurrentTime;
-        XSendEvent(dpy, c->win, False, NoEventMask, &ev);
-        
-        /* Wait a bit for the client to respond */
-        usleep(100000);  /* 100ms */
-        
-        /* If window still exists, force kill it */
-        if (XGetWindowAttributes(dpy, c->win, &attr)) {
-            XKillClient(dpy, c->win);
+    /* Save window states */
+    for (Client *c = clients; c; c = c->next) {
+        num_wins++;
+        wins = realloc(wins, sizeof(Window) * num_wins);
+        workspaces = realloc(workspaces, sizeof(int) * num_wins);
+        if (!wins || !workspaces) {
+            wm_log("Failed to allocate memory during reload\n");
+            free(wins);
+            free(workspaces);
+            XCloseDisplay(new_dpy);
+            return;
         }
+        wins[num_wins - 1] = c->win;
+        workspaces[num_wins - 1] = c->workspace;
     }
-    
-    /* Wait for all windows to close */
-    usleep(500000);  /* 500ms */
-    
+
+    /* Store window info in root window property */
+    if (num_wins > 0) {
+        char *states = malloc(num_wins * sizeof(char));
+        if (states) {
+            for (int i = 0; i < num_wins; i++) {
+                Client *c;
+                for (c = clients; c && c->win != wins[i]; c = c->next);
+                states[i] = c ? (c->isfloating ? 1 : 0) : 0;
+            }
+            XChangeProperty(dpy, root, XInternAtom(dpy, "_WM_WINDOW_STATES", False),
+                          XA_CARDINAL, 8, PropModeReplace,
+                          (unsigned char *)states, num_wins);
+            free(states);
+        }
+        XChangeProperty(dpy, root, XInternAtom(dpy, "_WM_WINDOWS", False),
+                       XA_WINDOW, 32, PropModeReplace,
+                       (unsigned char *)wins, num_wins);
+        XChangeProperty(dpy, root, XInternAtom(dpy, "_WM_WORKSPACES", False),
+                       XA_CARDINAL, 32, PropModeReplace,
+                       (unsigned char *)workspaces, num_wins);
+    }
+
+    /* Clean up */
+    free(wins);
+    free(workspaces);
+
     /* Release all grabs */
     XUngrabKey(dpy, AnyKey, AnyModifier, root);
     XUngrabButton(dpy, AnyButton, AnyModifier, root);
     XSync(dpy, False);
-
-    /* Clean up and close display */
-    cleanup();
+    
+    /* Close old display */
     XCloseDisplay(dpy);
     
+    /* Set new display as current */
+    dpy = new_dpy;
+    screen = DefaultScreen(dpy);
+    root = RootWindow(dpy, screen);
+    XGetWindowAttributes(dpy, root, &attr);
+
+    /* Re-grab keys */
+    for (long unsigned int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
+        XGrabKey(dpy, XKeysymToKeycode(dpy, keys[i].keysym),
+                keys[i].mod, root, True,
+                GrabModeAsync, GrabModeAsync);
+    }
+
+    /* Re-select events */
+    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask |
+                           ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
+                           EnterWindowMask);
+    XSync(dpy, False);
+
     /* Exec new instance */
     execl(path, path, NULL);
     
