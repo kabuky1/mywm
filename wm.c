@@ -13,10 +13,7 @@
 #include <stdarg.h>
 #include <linux/limits.h>
 
-/* Function declarations */
-void cleanup(void);
-
-/* Type definitions */
+/* Type definitions - must come before function declarations */
 typedef struct Client {
     Window win;
     int x, y, w, h;
@@ -26,33 +23,35 @@ typedef struct Client {
     int isfullscreen;
 } Client;
 
+/* Function declarations */
+void cleanup(void);
+
 /* Forward declarations */
 static void maprequest(XEvent *e);
 static void keypress(XEvent *e);
 static void destroynotify(XEvent *e);
 static void configurerequest(XEvent *e);
-static void focusnext(const char **arg);
-static void focusprev(const char **arg);
-static void spawn(const char **arg);
-static void setmfact(const char **arg);
-static void togglefloating(const char **arg);
-static void quit(const char **arg);
+static void focusnext(const char **);
+static void focusprev(const char **);
+static void spawn(const char **);
+static void setmfact(const char **);
+static void togglefloating(const char **);
+static void quit(const char **);
 static void focus(Client *c);
 static void arrange(void);
-static int xerror(Display *dpy, XErrorEvent *ee);
-static void scan(void);
-static void swapmaster(const char **arg);
+static void swapmaster(const char **);
+static void sendtoworkspace(const char **);
+static void switchworkspace(const char **);
+static void togglefullscreen(const char **);
+static void killclient(const char **);
+static void clearworkspace(const char **);
+static void showworkspace(const char **);
+static void reload(const char **);
+static void reload_keys(const char **);
 static void enternotify(XEvent *e);
-static void sendtoworkspace(const char **arg);
-static void switchworkspace(const char **arg);
-static void togglefullscreen(const char **arg);
-static void killclient(const char **arg);
 static void buttonpress(XEvent *e);
 static void buttonrelease(XEvent *e);
 static void motionnotify(XEvent *e);
-static void clearworkspace(const char **arg);
-static void showworkspace(const char **arg);
-static void reload(const char **arg);
 
 #include "config.h"
 
@@ -326,12 +325,12 @@ keypress(XEvent *e)
     XKeyEvent *ev = &e->xkey;
     KeySym keysym = XkbKeycodeToKeysym(dpy, ev->keycode, 0, 0);
     long unsigned int i;
-    const char **args;
+    const char *const *args;  // Updated type to match keys[].arg
 
     for (i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
         if (keysym == keys[i].keysym && keys[i].mod == ev->state && keys[i].func) {
-            args = keys[i].arg;  // Assign the array of strings directly
-            keys[i].func(args);
+            args = keys[i].arg;
+            keys[i].func((const char **)args);  // Cast to match function parameter type
         }
     }
 }
@@ -577,7 +576,7 @@ spawn(const char **arg)
                 strncpy(expanded_path, arg[0], sizeof(expanded_path) - 1);
             }
             
-            const char *const sh_args[] = {"/bin/sh", expanded_path, NULL};
+            const char *sh_args[] = {"/bin/sh", expanded_path, NULL};
             execv("/bin/sh", (char *const*)sh_args);
         } else {
             execvp(arg[0], (char *const*)arg);
@@ -993,102 +992,70 @@ showworkspace(const char **arg __attribute__((unused)))
 void
 reload(const char **arg __attribute__((unused)))
 {
+    /* Recompile first */
+    reload_keys(NULL);
+
+    /* Then do full reload */
     char path[PATH_MAX];
     ssize_t len;
-    Window *wins = NULL;
-    int *workspaces = NULL;
-    int num_wins = 0;
-    Display *new_dpy;
-
-    /* Try to open new display connection before closing the old one */
-    new_dpy = XOpenDisplay(NULL);
-    if (!new_dpy) {
-        wm_log("Failed to open new display connection for reload\n");
-        return;
-    }
-
+    
     /* Get path to current executable */
     len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len < 0) {
         wm_log("Failed to get executable path\n");
-        XCloseDisplay(new_dpy);
         return;
     }
     path[len] = '\0';
 
-    /* Save window states */
-    for (Client *c = clients; c; c = c->next) {
-        num_wins++;
-        wins = realloc(wins, sizeof(Window) * num_wins);
-        workspaces = realloc(workspaces, sizeof(int) * num_wins);
-        if (!wins || !workspaces) {
-            wm_log("Failed to allocate memory during reload\n");
-            free(wins);
-            free(workspaces);
-            XCloseDisplay(new_dpy);
-            return;
-        }
-        wins[num_wins - 1] = c->win;
-        workspaces[num_wins - 1] = c->workspace;
+    /* Execute the new binary */
+    execl(path, path, NULL);
+    
+    wm_log("Failed to reload window manager\n");
+}
+
+void
+reload_keys(const char **arg __attribute__((unused)))
+{
+    char cmd[PATH_MAX + 100];
+    char path[PATH_MAX];
+    ssize_t len;
+
+    /* Get path to executable directory */
+    len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len < 0) {
+        wm_log("Failed to get executable path\n");
+        return;
+    }
+    path[len] = '\0';
+    
+    /* Remove executable name to get directory */
+    char *last_slash = strrchr(path, '/');
+    if (last_slash) *last_slash = '\0';
+
+    /* Recompile the window manager */
+    snprintf(cmd, sizeof(cmd), "cd %s && make clean && make && make install", path);
+    if (system(cmd) != 0) {
+        wm_log("Failed to recompile window manager\n");
+        return;
     }
 
-    /* Store window info in root window property */
-    if (num_wins > 0) {
-        char *states = malloc(num_wins * sizeof(char));
-        if (states) {
-            for (int i = 0; i < num_wins; i++) {
-                Client *c;
-                for (c = clients; c && c->win != wins[i]; c = c->next);
-                states[i] = c ? (c->isfloating ? 1 : 0) : 0;
-            }
-            XChangeProperty(dpy, root, XInternAtom(dpy, "_WM_WINDOW_STATES", False),
-                          XA_CARDINAL, 8, PropModeReplace,
-                          (unsigned char *)states, num_wins);
-            free(states);
-        }
-        XChangeProperty(dpy, root, XInternAtom(dpy, "_WM_WINDOWS", False),
-                       XA_WINDOW, 32, PropModeReplace,
-                       (unsigned char *)wins, num_wins);
-        XChangeProperty(dpy, root, XInternAtom(dpy, "_WM_WORKSPACES", False),
-                       XA_CARDINAL, 32, PropModeReplace,
-                       (unsigned char *)workspaces, num_wins);
-    }
-
-    /* Clean up */
-    free(wins);
-    free(workspaces);
-
-    /* Release all grabs */
+    /* First ungrab all keys */
     XUngrabKey(dpy, AnyKey, AnyModifier, root);
-    XUngrabButton(dpy, AnyButton, AnyModifier, root);
     XSync(dpy, False);
-    
-    /* Close old display */
-    XCloseDisplay(dpy);
-    
-    /* Set new display as current */
-    dpy = new_dpy;
-    screen = DefaultScreen(dpy);
-    root = RootWindow(dpy, screen);
-    XGetWindowAttributes(dpy, root, &attr);
 
-    /* Re-grab keys */
+    /* Force reload of config.h by recompiling */
+    #undef CONFIG_H
+    #include "config.h"
+
+    /* Re-grab all keys from refreshed config */
     for (long unsigned int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++) {
         XGrabKey(dpy, XKeysymToKeycode(dpy, keys[i].keysym),
                 keys[i].mod, root, True,
                 GrabModeAsync, GrabModeAsync);
     }
-
-    /* Re-select events */
-    XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask |
-                           ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
-                           EnterWindowMask);
     XSync(dpy, False);
-
-    /* Exec new instance */
-    execl(path, path, NULL);
     
-    wm_log("Failed to reload window manager\n");
+    wm_log("Reloaded key bindings\n");
 }
 
 /* Add this function after scan() */
